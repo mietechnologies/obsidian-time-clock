@@ -15,7 +15,7 @@ export const WEEKDAY_NAMES = [
 
 // Matches a full clock line (with or without surrounding *):
 //   *{08:04 - 12:50, 15:15 - ??:??} (4:46, 4.77)*
-const CLOCK_LINE_RE = /^\*?\{([^}]*)\}\s*\(\s*(\d+:\d{2})\s*,\s*(\d+\.\d{2})\s*\)\*?$/;
+const CLOCK_LINE_RE = /^\*?\{([^}]*)\}\s*\(\s*(\d+:\d{2})\s*,\s*(\d+\.\d{1,2})\s*\*?\)\*?$/;
 
 // Matches one complete session token "HH:MM - HH:MM"
 const SESSION_COMPLETE_RE = /^(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/;
