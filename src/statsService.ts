@@ -1,0 +1,138 @@
+import { App } from "obsidian";
+import type { HoursCountSettings, DayStats, WeekStats, MonthStats } from "./types";
+import {
+	parseClockLine,
+	isClockLineOpen,
+	parseDateString,
+	formatDateToString,
+	getWeekStart,
+	getWeekEnd,
+} from "./timeUtils";
+import {
+	getMonthlyFiles,
+	resolveWeeklyFile,
+	findDayHeaderIndex,
+	getClockLineInfo,
+} from "./fileResolver";
+
+// Matches an H2 date header: "## YYYY.MM.DD - DayName"
+const HEADER_RE = /^## (\d{4}\.\d{2}\.\d{2}) - \w+$/;
+
+export class StatsService {
+	constructor(
+		private app: App,
+		private getSettings: () => HoursCountSettings
+	) {}
+
+	async getMonthStats(year: number, month: number): Promise<MonthStats> {
+		const files = getMonthlyFiles(this.app, this.getSettings(), year, month);
+		let allDays: DayStats[] = [];
+
+		for (const file of files) {
+			const content = await this.app.vault.read(file);
+			allDays = allDays.concat(this.extractDayStats(content, year, month));
+		}
+
+		const completedDays = allDays.filter((d) => d.hasClockLine && d.isComplete);
+		const daysWorked = completedDays.length;
+		const totalMinutes = completedDays.reduce((s, d) => s + d.totalMinutes, 0);
+		const averageMinutesPerDay =
+			daysWorked > 0 ? Math.round(totalMinutes / daysWorked) : 0;
+		const incompleteDays = allDays
+			.filter((d) => d.hasClockLine && !d.isComplete)
+			.map((d) => d.date);
+
+		return { totalMinutes, daysWorked, averageMinutesPerDay, incompleteDays };
+	}
+
+	async getThisWeekStats(): Promise<WeekStats> {
+		const today = new Date();
+		const settings = this.getSettings();
+		const weekStart = getWeekStart(today, settings.weekStartDay);
+		const weekEnd = getWeekEnd(weekStart);
+
+		// Enumerate every day in the week
+		const dates: Date[] = [];
+		const cursor = new Date(weekStart);
+		while (cursor <= weekEnd) {
+			dates.push(new Date(cursor));
+			cursor.setDate(cursor.getDate() + 1);
+		}
+
+		let totalMinutes = 0;
+		let daysWorked = 0;
+
+		// Cache file content to avoid re-reading the same file multiple times
+		const contentCache = new Map<string, string>();
+
+		for (const date of dates) {
+			const file = resolveWeeklyFile(this.app, settings, date);
+			if (!file) continue;
+
+			let content = contentCache.get(file.path);
+			if (content === undefined) {
+				content = await this.app.vault.read(file);
+				contentCache.set(file.path, content);
+			}
+
+			const headerIdx = findDayHeaderIndex(content, date);
+			if (headerIdx === -1) continue;
+
+			const clockInfo = getClockLineInfo(content, headerIdx);
+			if (!clockInfo) continue;
+
+			const parsed = parseClockLine(clockInfo.lineContent);
+			if (!parsed || isClockLineOpen(parsed)) continue;
+
+			totalMinutes += parsed.totalMinutes;
+			daysWorked++;
+		}
+
+		return { totalMinutes, daysWorked };
+	}
+
+	/**
+	 * Extract DayStats for every date header in `content` that belongs to
+	 * the specified year/month. Month-boundary files may contain headers from
+	 * adjacent months; those are filtered out here.
+	 */
+	private extractDayStats(
+		content: string,
+		year: number,
+		month: number
+	): DayStats[] {
+		const lines = content.split("\n");
+		const results: DayStats[] = [];
+
+		for (let i = 0; i < lines.length; i++) {
+			const match = HEADER_RE.exec(lines[i].trimEnd());
+			if (!match) continue;
+
+			const dateStr = match[1];
+			const date = parseDateString(dateStr);
+			if (!date) continue;
+			if (date.getFullYear() !== year || date.getMonth() + 1 !== month) continue;
+
+			const clockIdx = i + 1;
+			if (clockIdx >= lines.length) {
+				results.push({ date: dateStr, totalMinutes: 0, isComplete: true, hasClockLine: false });
+				continue;
+			}
+
+			const parsed = parseClockLine(lines[clockIdx]);
+			if (!parsed) {
+				results.push({ date: dateStr, totalMinutes: 0, isComplete: true, hasClockLine: false });
+				continue;
+			}
+
+			results.push({
+				date: dateStr,
+				totalMinutes: parsed.totalMinutes,
+				isComplete: !isClockLineOpen(parsed),
+				hasClockLine: true,
+			});
+		}
+
+		return results;
+	}
+}
