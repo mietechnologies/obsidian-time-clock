@@ -13,9 +13,12 @@ export const WEEKDAY_NAMES = [
 
 // ---- Regex ----
 
-// Matches a full clock line (with or without surrounding *):
+// Matches a full clock line (with or without surrounding *).
+// Accepts both curly-brace and parenthesis session blocks:
 //   *{08:04 - 12:50, 15:15 - ??:??} (4:46, 4.77)*
-const CLOCK_LINE_RE = /^\*?\{([^}]*)\}\s*\(\s*(\d+:\d{2})\s*,\s*(\d+\.\d{1,2})\s*\*?\)\*?$/;
+//   *(08:04 - 12:50, 15:15 - ??:??) (?:??, ?.??)*
+// Total fields may be numeric or placeholder (?, ?:??, ?.??).
+const CLOCK_LINE_RE = /^\*?[\(\{]([^\)\}]*)[\)\}]\s*\(\s*[\d?]+:[\d?]{2}\s*,\s*[\d?]+\.[\d?]{1,2}\s*\*?\)\*?$/;
 
 // Matches a PTO marker line (with or without surrounding *): *{PTO}*
 const PTO_LINE_RE = /^\*?\{PTO\}\*?$/;
