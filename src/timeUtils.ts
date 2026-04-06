@@ -17,6 +17,17 @@ export const WEEKDAY_NAMES = [
 //   *{08:04 - 12:50, 15:15 - ??:??} (4:46, 4.77)*
 const CLOCK_LINE_RE = /^\*?\{([^}]*)\}\s*\(\s*(\d+:\d{2})\s*,\s*(\d+\.\d{1,2})\s*\*?\)\*?$/;
 
+// Matches a PTO marker line (with or without surrounding *): *[PTO]*
+const PTO_LINE_RE = /^\*?\[PTO\]\*?$/;
+
+/** The canonical PTO marker written into notes. */
+export const PTO_LINE = "*[PTO]*";
+
+/** True if `line` is a PTO marker. */
+export function isPtoLine(line: string): boolean {
+	return PTO_LINE_RE.test(line.trim());
+}
+
 // Matches one complete session token "HH:MM - HH:MM"
 const SESSION_COMPLETE_RE = /^(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/;
 

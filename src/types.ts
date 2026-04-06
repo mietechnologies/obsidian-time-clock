@@ -19,11 +19,13 @@ export interface DayStats {
 	totalMinutes: number;
 	isComplete: boolean; // true = no open sessions
 	hasClockLine: boolean;
+	isPto: boolean;      // true = day is marked as PTO
 }
 
 export interface WeekStats {
 	totalMinutes: number;
 	daysWorked: number;
+	ptoDays: number;
 }
 
 export interface MonthStats {
@@ -31,6 +33,8 @@ export interface MonthStats {
 	daysWorked: number;
 	averageMinutesPerDay: number;
 	incompleteDays: string[]; // "YYYY.MM.DD" list
+	ptoDays: number;
+	ptoDates: string[];       // "YYYY.MM.DD" list
 }
 
 export type ClockResult =

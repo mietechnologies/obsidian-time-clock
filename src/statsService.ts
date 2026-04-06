@@ -3,6 +3,7 @@ import type { HoursCountSettings, DayStats, WeekStats, MonthStats } from "./type
 import {
 	parseClockLine,
 	isClockLineOpen,
+	isPtoLine,
 	parseDateString,
 	formatDateToString,
 	getWeekStart,
@@ -39,10 +40,12 @@ export class StatsService {
 		const averageMinutesPerDay =
 			daysWorked > 0 ? Math.round(totalMinutes / daysWorked) : 0;
 		const incompleteDays = allDays
-			.filter((d) => d.hasClockLine && !d.isComplete)
+			.filter((d) => d.hasClockLine && !d.isComplete && !d.isPto)
 			.map((d) => d.date);
+		const ptoDates = allDays.filter((d) => d.isPto).map((d) => d.date);
+		const ptoDays = ptoDates.length;
 
-		return { totalMinutes, daysWorked, averageMinutesPerDay, incompleteDays };
+		return { totalMinutes, daysWorked, averageMinutesPerDay, incompleteDays, ptoDays, ptoDates };
 	}
 
 	async getThisWeekStats(): Promise<WeekStats> {
@@ -61,6 +64,7 @@ export class StatsService {
 
 		let totalMinutes = 0;
 		let daysWorked = 0;
+		let ptoDays = 0;
 
 		// Cache file content to avoid re-reading the same file multiple times
 		const contentCache = new Map<string, string>();
@@ -81,6 +85,11 @@ export class StatsService {
 			const clockInfo = getClockLineInfo(content, headerIdx);
 			if (!clockInfo) continue;
 
+			if (isPtoLine(clockInfo.lineContent)) {
+				ptoDays++;
+				continue;
+			}
+
 			const parsed = parseClockLine(clockInfo.lineContent);
 			if (!parsed || isClockLineOpen(parsed)) continue;
 
@@ -88,7 +97,7 @@ export class StatsService {
 			daysWorked++;
 		}
 
-		return { totalMinutes, daysWorked };
+		return { totalMinutes, daysWorked, ptoDays };
 	}
 
 	/**
@@ -115,13 +124,18 @@ export class StatsService {
 
 			const clockIdx = i + 1;
 			if (clockIdx >= lines.length) {
-				results.push({ date: dateStr, totalMinutes: 0, isComplete: true, hasClockLine: false });
+				results.push({ date: dateStr, totalMinutes: 0, isComplete: true, hasClockLine: false, isPto: false });
+				continue;
+			}
+
+			if (isPtoLine(lines[clockIdx])) {
+				results.push({ date: dateStr, totalMinutes: 0, isComplete: true, hasClockLine: false, isPto: true });
 				continue;
 			}
 
 			const parsed = parseClockLine(lines[clockIdx]);
 			if (!parsed) {
-				results.push({ date: dateStr, totalMinutes: 0, isComplete: true, hasClockLine: false });
+				results.push({ date: dateStr, totalMinutes: 0, isComplete: true, hasClockLine: false, isPto: false });
 				continue;
 			}
 
@@ -130,6 +144,7 @@ export class StatsService {
 				totalMinutes: parsed.totalMinutes,
 				isComplete: !isClockLineOpen(parsed),
 				hasClockLine: true,
+				isPto: false,
 			});
 		}
 

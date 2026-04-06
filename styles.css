@@ -40,6 +40,23 @@
 	color: var(--text-on-accent);
 }
 
+/* PTO row */
+.hours-count-pto-row {
+	display: flex;
+}
+
+.hours-count-btn-pto {
+	flex: 1;
+	background-color: var(--background-secondary);
+	color: var(--text-muted);
+	border-color: var(--background-modifier-border);
+}
+
+.hours-count-btn-pto.hours-count-btn-pto-active {
+	background-color: var(--color-blue);
+	color: var(--text-on-accent);
+}
+
 /* Year / Month picker */
 .hours-count-picker-row {
 	display: flex;

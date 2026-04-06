@@ -9,6 +9,8 @@ import {
 	formatMinutesToHMM,
 	formatMinutesToDecimal,
 	calculateTotalMinutes,
+	isPtoLine,
+	PTO_LINE,
 } from "./timeUtils";
 import {
 	resolveWeeklyFile,
@@ -43,6 +45,10 @@ export class ClockService {
 		const timeNow = currentTimeString();
 
 		if (clockInfo !== null) {
+			if (isPtoLine(clockInfo.lineContent)) {
+				return { ok: false, reason: "Today is marked as PTO." };
+			}
+
 			const parsed = parseClockLine(clockInfo.lineContent);
 
 			if (parsed !== null) {
@@ -114,8 +120,8 @@ export class ClockService {
 		return { ok: true };
 	}
 
-	/** Check whether today has an active open clock session. */
-	async getTodayClockState(): Promise<"in" | "out" | "unknown"> {
+	/** Check whether today has an active open clock session, is PTO, or is clocked out. */
+	async getTodayClockState(): Promise<"in" | "out" | "pto" | "unknown"> {
 		const now = new Date();
 		const file = resolveWeeklyFile(this.app, this.getSettings(), now);
 		if (!file) return "unknown";
@@ -127,9 +133,69 @@ export class ClockService {
 		const clockInfo = getClockLineInfo(content, headerIdx);
 		if (!clockInfo) return "out";
 
+		if (isPtoLine(clockInfo.lineContent)) return "pto";
+
 		const parsed = parseClockLine(clockInfo.lineContent);
 		if (!parsed) return "out";
 
 		return isClockLineOpen(parsed) ? "in" : "out";
+	}
+
+	/** Mark today as PTO by inserting a PTO marker after the day header. */
+	async markTodayAsPto(): Promise<ClockResult> {
+		const now = new Date();
+		const file = resolveWeeklyFile(this.app, this.getSettings(), now);
+		if (!file) return { ok: false, reason: "No weekly file found for today." };
+
+		const content = await this.app.vault.read(file);
+		const headerIdx = findDayHeaderIndex(content, now);
+		if (headerIdx === -1) {
+			return { ok: false, reason: `No header found for today in ${file.name}.` };
+		}
+
+		const lines = content.split("\n");
+		const clockInfo = getClockLineInfo(content, headerIdx);
+
+		if (clockInfo !== null) {
+			if (isPtoLine(clockInfo.lineContent)) {
+				return { ok: false, reason: "Today is already marked as PTO." };
+			}
+			const parsed = parseClockLine(clockInfo.lineContent);
+			if (parsed) {
+				if (isClockLineOpen(parsed)) {
+					return { ok: false, reason: "Cannot mark PTO while clocked in." };
+				}
+				return { ok: false, reason: "Today already has clock data." };
+			}
+		}
+
+		lines.splice(headerIdx + 1, 0, PTO_LINE);
+		await this.app.vault.modify(file, lines.join("\n"));
+		new Notice("Hours Count: Today marked as PTO.");
+		return { ok: true };
+	}
+
+	/** Remove the PTO marker from today's entry. */
+	async unmarkTodayAsPto(): Promise<ClockResult> {
+		const now = new Date();
+		const file = resolveWeeklyFile(this.app, this.getSettings(), now);
+		if (!file) return { ok: false, reason: "No weekly file found for today." };
+
+		const content = await this.app.vault.read(file);
+		const headerIdx = findDayHeaderIndex(content, now);
+		if (headerIdx === -1) {
+			return { ok: false, reason: `No header found for today in ${file.name}.` };
+		}
+
+		const clockInfo = getClockLineInfo(content, headerIdx);
+		if (!clockInfo || !isPtoLine(clockInfo.lineContent)) {
+			return { ok: false, reason: "Today is not marked as PTO." };
+		}
+
+		const lines = content.split("\n");
+		lines.splice(clockInfo.lineIndex, 1);
+		await this.app.vault.modify(file, lines.join("\n"));
+		new Notice("Hours Count: PTO removed for today.");
+		return { ok: true };
 	}
 }
