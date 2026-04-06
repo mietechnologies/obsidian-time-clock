@@ -1,4 +1,4 @@
-import { App, Modal } from "obsidian";
+import { App, Modal, Notice } from "obsidian";
 import { PtoScheduler } from "./ptoScheduler";
 import { parseDateString } from "./timeUtils";
 
@@ -93,10 +93,9 @@ export class PtoModal extends Modal {
 			if (result.daysSkipped > 0)
 				parts.push(`${result.daysSkipped} day${result.daysSkipped !== 1 ? "s" : ""} skipped`);
 
-			status.setText(parts.join(", ") + ".");
-			status.addClass("hours-count-modal-status-ok");
-
+			new Notice(`Hours Count: ${parts.join(", ")}.`);
 			this.onSuccess();
+			this.close();
 		};
 
 		submitBtn.addEventListener("click", submit);

@@ -5,6 +5,7 @@ import type { HoursCountSettings } from "./types";
 export const DEFAULT_SETTINGS: HoursCountSettings = {
 	notesFolder: "Daily Notes",
 	weekStartDay: 0,
+	ptoHoursPerDay: 8,
 };
 
 export class HoursCountSettingTab extends PluginSettingTab {
@@ -34,6 +35,22 @@ export class HoursCountSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.notesFolder = value.trim();
 						await this.plugin.saveSettings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("PTO hours per day")
+			.setDesc("Hours credited for a full PTO day, and the target used when finishing a day with PTO.")
+			.addText((text) =>
+				text
+					.setPlaceholder("8")
+					.setValue(String(this.plugin.settings.ptoHoursPerDay))
+					.onChange(async (value) => {
+						const n = parseFloat(value);
+						if (!isNaN(n) && n > 0) {
+							this.plugin.settings.ptoHoursPerDay = n;
+							await this.plugin.saveSettings();
+						}
 					})
 			);
 

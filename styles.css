@@ -57,6 +57,11 @@
 	color: var(--text-on-accent);
 }
 
+.hours-count-btn-pto.hours-count-btn-pto-finish {
+	background-color: var(--color-orange);
+	color: var(--text-on-accent);
+}
+
 /* Year / Month picker */
 .hours-count-picker-row {
 	display: flex;

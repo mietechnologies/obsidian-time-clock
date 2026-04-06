@@ -141,6 +141,50 @@ export class ClockService {
 		return isClockLineOpen(parsed) ? "in" : "out";
 	}
 
+	/**
+	 * Clock out of the current session and fill the remainder of the configured
+	 * PTO day length with a "PTO - H:MM" token on the same clock line.
+	 */
+	async finishDayWithPto(): Promise<ClockResult> {
+		const now = new Date();
+		const settings = this.getSettings();
+		const file = resolveWeeklyFile(this.app, settings, now);
+		if (!file) return { ok: false, reason: "No weekly file found for today." };
+
+		const content = await this.app.vault.read(file);
+		const headerIdx = findDayHeaderIndex(content, now);
+		if (headerIdx === -1) {
+			return { ok: false, reason: `No header found for today in ${file.name}.` };
+		}
+
+		const clockInfo = getClockLineInfo(content, headerIdx);
+		if (!clockInfo) return { ok: false, reason: "Not currently clocked in." };
+
+		const parsed = parseClockLine(clockInfo.lineContent);
+		if (!parsed || !isClockLineOpen(parsed)) {
+			return { ok: false, reason: "Not currently clocked in." };
+		}
+
+		const timeNow = currentTimeString();
+		const closedSessions = parsed.sessions.map((s) =>
+			s.end === null ? { start: s.start, end: timeNow } : s
+		);
+
+		const workedMinutes = calculateTotalMinutes(closedSessions);
+		const ptoTarget = Math.round(settings.ptoHoursPerDay * 60);
+		const ptoMinutes = Math.max(0, ptoTarget - workedMinutes);
+
+		const lines = content.split("\n");
+		lines[clockInfo.lineIndex] = buildClockLine(closedSessions, ptoMinutes);
+		await this.app.vault.modify(file, lines.join("\n"));
+
+		const msg = ptoMinutes > 0
+			? `Clocked out at ${timeNow}. Worked: ${formatMinutesToHMM(workedMinutes)}, PTO: ${formatMinutesToHMM(ptoMinutes)}.`
+			: `Clocked out at ${timeNow}. Full day already worked — no PTO added.`;
+		new Notice(`Hours Count: ${msg}`);
+		return { ok: true };
+	}
+
 	/** Mark today as PTO by inserting a PTO marker after the day header. */
 	async markTodayAsPto(): Promise<ClockResult> {
 		const now = new Date();

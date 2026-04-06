@@ -17,11 +17,11 @@ export const WEEKDAY_NAMES = [
 //   *{08:04 - 12:50, 15:15 - ??:??} (4:46, 4.77)*
 const CLOCK_LINE_RE = /^\*?\{([^}]*)\}\s*\(\s*(\d+:\d{2})\s*,\s*(\d+\.\d{1,2})\s*\*?\)\*?$/;
 
-// Matches a PTO marker line (with or without surrounding *): *[PTO]*
-const PTO_LINE_RE = /^\*?\[PTO\]\*?$/;
+// Matches a PTO marker line (with or without surrounding *): *{PTO}*
+const PTO_LINE_RE = /^\*?\{PTO\}\*?$/;
 
 /** The canonical PTO marker written into notes. */
-export const PTO_LINE = "*[PTO]*";
+export const PTO_LINE = "*{PTO}*";
 
 /** True if `line` is a PTO marker. */
 export function isPtoLine(line: string): boolean {
@@ -33,6 +33,9 @@ const SESSION_COMPLETE_RE = /^(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/;
 
 // Matches one open session token "HH:MM - ??:??"
 const SESSION_OPEN_RE = /^(\d{2}:\d{2})\s*-\s*\?\?:\?\?$/;
+
+// Matches a partial-day PTO token "PTO - H:MM"
+const PTO_SESSION_RE = /^PTO\s*-\s*(\d+):(\d{2})$/;
 
 // ---- Time arithmetic ----
 
@@ -79,6 +82,7 @@ export function parseClockLine(line: string): ParsedClockLine | null {
 
 	const sessionsBlock = match[1].trim();
 	const sessions: TimeSession[] = [];
+	let ptoMinutes = 0;
 
 	for (const part of sessionsBlock.split(",").map((s) => s.trim())) {
 		const complete = SESSION_COMPLETE_RE.exec(part);
@@ -91,11 +95,17 @@ export function parseClockLine(line: string): ParsedClockLine | null {
 			sessions.push({ start: open[1], end: null });
 			continue;
 		}
+		const pto = PTO_SESSION_RE.exec(part);
+		if (pto) {
+			ptoMinutes += parseInt(pto[1]) * 60 + parseInt(pto[2]);
+			continue;
+		}
 		return null; // unrecognized session format
 	}
 
 	return {
 		sessions,
+		ptoMinutes,
 		totalMinutes: calculateTotalMinutes(sessions),
 		raw: trimmed,
 	};
@@ -104,15 +114,15 @@ export function parseClockLine(line: string): ParsedClockLine | null {
 // ---- Clock line building ----
 
 /**
- * Rebuild a clock line string from sessions.
+ * Rebuild a clock line string from sessions, with an optional partial-day PTO duration.
  * Always produces the italic form: *{...} (H:MM, D.DD)*
+ * The totals in parentheses reflect work time only; PTO is appended as a separate token.
  */
-export function buildClockLine(sessions: TimeSession[]): string {
-	const sessionStr = sessions
-		.map((s) => `${s.start} - ${s.end ?? "??:??"}`)
-		.join(", ");
+export function buildClockLine(sessions: TimeSession[], ptoMinutes = 0): string {
+	const parts = sessions.map((s) => `${s.start} - ${s.end ?? "??:??"}`);
+	if (ptoMinutes > 0) parts.push(`PTO - ${formatMinutesToHMM(ptoMinutes)}`);
 	const total = calculateTotalMinutes(sessions);
-	return `*{${sessionStr}} (${formatMinutesToHMM(total)}, ${formatMinutesToDecimal(total)})*`;
+	return `*{${parts.join(", ")}} (${formatMinutesToHMM(total)}, ${formatMinutesToDecimal(total)})*`;
 }
 
 // ---- Clock state queries ----

@@ -122,16 +122,32 @@ export class HoursCountPanelView extends ItemView {
 
 		const ptoRow = parent.createDiv({ cls: "hours-count-pto-row" });
 		const isPto = this.clockState === "pto";
-		const ptoBtn = ptoRow.createEl("button", {
-			text: isPto ? "Unmark PTO" : "Mark Today as PTO",
-			cls: `hours-count-btn hours-count-btn-pto${isPto ? " hours-count-btn-pto-active" : ""}`,
-		});
-		ptoBtn.disabled = this.clockState === "in";
+		const isClockedIn = this.clockState === "in";
+
+		let ptoBtnText: string;
+		let ptoBtnCls: string;
+		if (isPto) {
+			ptoBtnText = "Unmark PTO";
+			ptoBtnCls = "hours-count-btn hours-count-btn-pto hours-count-btn-pto-active";
+		} else if (isClockedIn) {
+			ptoBtnText = "Finish Day with PTO";
+			ptoBtnCls = "hours-count-btn hours-count-btn-pto hours-count-btn-pto-finish";
+		} else {
+			ptoBtnText = "Mark Today as PTO";
+			ptoBtnCls = "hours-count-btn hours-count-btn-pto";
+		}
+
+		const ptoBtn = ptoRow.createEl("button", { text: ptoBtnText, cls: ptoBtnCls });
 
 		ptoBtn.addEventListener("click", async () => {
-			const result = isPto
-				? await this.clockService.unmarkTodayAsPto()
-				: await this.clockService.markTodayAsPto();
+			let result;
+			if (isPto) {
+				result = await this.clockService.unmarkTodayAsPto();
+			} else if (isClockedIn) {
+				result = await this.clockService.finishDayWithPto();
+			} else {
+				result = await this.clockService.markTodayAsPto();
+			}
 			if (!result.ok) new Notice(`Hours Count: ${result.reason}`);
 			await this.refresh();
 		});
@@ -196,6 +212,13 @@ export class HoursCountPanelView extends ItemView {
 			`${formatMinutesToHMM(this.weekStats.totalMinutes)} (${formatMinutesToDecimal(this.weekStats.totalMinutes)} hrs)`
 		);
 		this.addStatRow(grid, "Days worked", String(this.weekStats.daysWorked));
+		if (this.weekStats.ptoMinutes > 0) {
+			this.addStatRow(
+				grid,
+				"PTO time",
+				`${formatMinutesToHMM(this.weekStats.ptoMinutes)} (${formatMinutesToDecimal(this.weekStats.ptoMinutes)} hrs)`
+			);
+		}
 		if (this.weekStats.ptoDays > 0) {
 			this.addStatRow(grid, "PTO days", String(this.weekStats.ptoDays));
 		}
@@ -226,6 +249,13 @@ export class HoursCountPanelView extends ItemView {
 				? `${formatMinutesToHMM(this.monthStats.averageMinutesPerDay)} (${formatMinutesToDecimal(this.monthStats.averageMinutesPerDay)} hrs)`
 				: "—"
 		);
+		if (this.monthStats.ptoMinutes > 0) {
+			this.addStatRow(
+				grid,
+				"PTO time",
+				`${formatMinutesToHMM(this.monthStats.ptoMinutes)} (${formatMinutesToDecimal(this.monthStats.ptoMinutes)} hrs)`
+			);
+		}
 		if (this.monthStats.ptoDays > 0) {
 			this.addStatRow(grid, "PTO days", String(this.monthStats.ptoDays));
 		}

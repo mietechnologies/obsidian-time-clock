@@ -44,8 +44,9 @@ export class StatsService {
 			.map((d) => d.date);
 		const ptoDates = allDays.filter((d) => d.isPto).map((d) => d.date);
 		const ptoDays = ptoDates.length;
+		const ptoMinutes = allDays.reduce((s, d) => s + d.ptoMinutes, 0);
 
-		return { totalMinutes, daysWorked, averageMinutesPerDay, incompleteDays, ptoDays, ptoDates };
+		return { totalMinutes, daysWorked, averageMinutesPerDay, incompleteDays, ptoDays, ptoDates, ptoMinutes };
 	}
 
 	async getThisWeekStats(): Promise<WeekStats> {
@@ -62,9 +63,11 @@ export class StatsService {
 			cursor.setDate(cursor.getDate() + 1);
 		}
 
+		const ptoMinutesPerDay = Math.round(this.getSettings().ptoHoursPerDay * 60);
 		let totalMinutes = 0;
 		let daysWorked = 0;
 		let ptoDays = 0;
+		let ptoMinutes = 0;
 
 		// Cache file content to avoid re-reading the same file multiple times
 		const contentCache = new Map<string, string>();
@@ -87,6 +90,7 @@ export class StatsService {
 
 			if (isPtoLine(clockInfo.lineContent)) {
 				ptoDays++;
+				ptoMinutes += ptoMinutesPerDay;
 				continue;
 			}
 
@@ -94,10 +98,11 @@ export class StatsService {
 			if (!parsed || isClockLineOpen(parsed)) continue;
 
 			totalMinutes += parsed.totalMinutes;
+			ptoMinutes += parsed.ptoMinutes;
 			daysWorked++;
 		}
 
-		return { totalMinutes, daysWorked, ptoDays };
+		return { totalMinutes, daysWorked, ptoDays, ptoMinutes };
 	}
 
 	/**
@@ -110,6 +115,7 @@ export class StatsService {
 		year: number,
 		month: number
 	): DayStats[] {
+		const ptoMinutesPerDay = Math.round(this.getSettings().ptoHoursPerDay * 60);
 		const lines = content.split("\n");
 		const results: DayStats[] = [];
 
@@ -124,24 +130,25 @@ export class StatsService {
 
 			const clockIdx = i + 1;
 			if (clockIdx >= lines.length) {
-				results.push({ date: dateStr, totalMinutes: 0, isComplete: true, hasClockLine: false, isPto: false });
+				results.push({ date: dateStr, totalMinutes: 0, ptoMinutes: 0, isComplete: true, hasClockLine: false, isPto: false });
 				continue;
 			}
 
 			if (isPtoLine(lines[clockIdx])) {
-				results.push({ date: dateStr, totalMinutes: 0, isComplete: true, hasClockLine: false, isPto: true });
+				results.push({ date: dateStr, totalMinutes: 0, ptoMinutes: ptoMinutesPerDay, isComplete: true, hasClockLine: false, isPto: true });
 				continue;
 			}
 
 			const parsed = parseClockLine(lines[clockIdx]);
 			if (!parsed) {
-				results.push({ date: dateStr, totalMinutes: 0, isComplete: true, hasClockLine: false, isPto: false });
+				results.push({ date: dateStr, totalMinutes: 0, ptoMinutes: 0, isComplete: true, hasClockLine: false, isPto: false });
 				continue;
 			}
 
 			results.push({
 				date: dateStr,
 				totalMinutes: parsed.totalMinutes,
+				ptoMinutes: parsed.ptoMinutes,
 				isComplete: !isClockLineOpen(parsed),
 				hasClockLine: true,
 				isPto: false,
