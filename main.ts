@@ -2,6 +2,8 @@ import { Notice, Plugin, WorkspaceLeaf } from "obsidian";
 import { DEFAULT_SETTINGS, HoursCountSettingTab } from "./src/settings";
 import { ClockService } from "./src/clockService";
 import { PANEL_VIEW_TYPE, HoursCountPanelView } from "./src/panelView";
+import { PtoScheduler } from "./src/ptoScheduler";
+import { PtoModal } from "./src/ptoModal";
 import type { HoursCountSettings } from "./src/types";
 
 export default class HoursCountPlugin extends Plugin {
@@ -57,6 +59,16 @@ export default class HoursCountPlugin extends Plugin {
 			callback: () => this.activatePanelView(),
 		});
 
+		// Command: Schedule PTO
+		this.addCommand({
+			id: "schedule-pto",
+			name: "Schedule PTO",
+			callback: () => {
+				const scheduler = new PtoScheduler(this.app, () => this.settings);
+				new PtoModal(this.app, scheduler, () => this.refreshPanelView()).open();
+			},
+		});
+
 		// Restore panel when layout is ready (survives Obsidian restarts)
 		this.app.workspace.onLayoutReady(() => {
 			this.initPanelView();
@@ -103,7 +115,7 @@ export default class HoursCountPlugin extends Plugin {
 	}
 
 	/** Tell the panel to refresh after a clock operation. */
-	private refreshPanelView(): void {
+	refreshPanelView(): void {
 		for (const leaf of this.app.workspace.getLeavesOfType(PANEL_VIEW_TYPE)) {
 			if (leaf.view instanceof HoursCountPanelView) {
 				leaf.view.refresh();
