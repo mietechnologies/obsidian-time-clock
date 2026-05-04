@@ -38,12 +38,22 @@ function scanMonthForDate(
 ): TFile | null {
 	const files = getMonthlyFiles(app, settings, year, month);
 	for (const file of files) {
-		const match = file.name.match(
+		const rangeMatch = file.name.match(
 			/^(\d{4}\.\d{2}\.\d{2}) - (\d{4}\.\d{2}\.\d{2})\.md$/
 		);
-		if (!match) continue;
-		const start = parseDateString(match[1]);
-		const end = parseDateString(match[2]);
+		const singleMatch = !rangeMatch && file.name.match(/^(\d{4}\.\d{2}\.\d{2})\.md$/);
+
+		let start: Date | null = null;
+		let end: Date | null = null;
+
+		if (rangeMatch) {
+			start = parseDateString(rangeMatch[1]);
+			end = parseDateString(rangeMatch[2]);
+		} else if (singleMatch) {
+			start = parseDateString(singleMatch[1]);
+			end = start ? new Date(start) : null;
+		}
+
 		if (!start || !end) continue;
 		end.setHours(23, 59, 59, 999);
 		if (date >= start && date <= end) return file;
